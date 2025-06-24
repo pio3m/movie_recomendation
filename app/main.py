@@ -1,10 +1,11 @@
 from fastapi import FastAPI
-from app.routes import router
-from app.models import database, metadata, engine
+from .routes import router  # bo routes.py jest w app/
 
-app = FastAPI()  # <- TO JEST KLUCZ
+app = FastAPI()
 
-metadata.create_all(engine)
+
+
+from app.models import database
 
 @app.on_event("startup")
 async def startup():
@@ -14,4 +15,5 @@ async def startup():
 async def shutdown():
     await database.disconnect()
 
-app.include_router(router)  # <- TO PODPIĘCIE ENDPOINTÓW
+
+app.include_router(router)

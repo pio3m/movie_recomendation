@@ -21,3 +21,27 @@ async def trigger_import():
         return {"status": "success", "message": "Movies imported successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+from .training_model import train_and_save_model
+
+@router.post("/train-model")
+async def train_model_endpoint():
+    try:
+        result = await train_and_save_model()
+        return {"status": "trained", "details": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/fetch-data")
+async def fetch_training_data_preview(limit: int = 10):
+    query = """
+    SELECT m.id, m.title, m.year, m.rating, ARRAY_AGG(g.name) AS genres
+    FROM movies m
+    JOIN movie_genres mg ON m.id = mg.movie_id
+    JOIN genres g ON g.id = mg.genre_id
+    GROUP BY m.id, m.title, m.year, m.rating
+    ORDER BY m.rating DESC
+    LIMIT :limit
+    """
+    rows = await database.fetch_all(query=query, values={"limit": limit})
+    return rows
