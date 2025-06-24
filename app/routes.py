@@ -45,3 +45,51 @@ async def fetch_training_data_preview(limit: int = 10):
     """
     rows = await database.fetch_all(query=query, values={"limit": limit})
     return rows
+
+from fastapi import Request
+import pickle
+import numpy as np
+
+from .schemas import RecommendRequest
+
+@router.post("/recommend")
+async def recommend_movies(payload: RecommendRequest):
+    liked_titles = payload.liked_titles
+    n = payload.n_recommendations
+
+    if not liked_titles:
+        raise HTTPException(status_code=400, detail="No liked_titles provided")
+
+    # Załaduj model
+    try:
+        with open("models/model.pkl", "rb") as f:
+            data = pickle.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Model not trained yet.")
+
+    model = data["model"]
+    df = data["df"]
+    features = data["features"]
+
+    # Znajdź indeksy
+    liked_indices = df[df["title"].isin(liked_titles)].index.tolist()
+
+    if not liked_indices:
+        raise HTTPException(status_code=404, detail="None of the liked titles found in dataset.")
+
+    liked_vectors = features.iloc[liked_indices].values
+    mean_vector = np.mean(liked_vectors, axis=0).reshape(1, -1)
+
+    distances, indices = model.kneighbors(mean_vector, n_neighbors=n + len(liked_indices))
+    indices = indices.flatten()
+
+    recommended = (
+        df.iloc[indices]
+        .loc[~df.iloc[indices].index.isin(liked_indices)]
+        .head(n)
+        .to_dict(orient="records")
+    )
+
+    return recommended
+
+
