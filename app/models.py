@@ -14,6 +14,7 @@ movies = Table(
     Column("year", Integer),
     Column("rating", Float),
     Column("overview", String),
+    
 )
 
 genres = Table(
@@ -28,6 +29,21 @@ movie_genres = Table(
     metadata,
     Column("movie_id", ForeignKey("movies.id")),
     Column("genre_id", ForeignKey("genres.id"))
+)
+
+
+emotions = Table(
+    "emotions",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String, unique=True, nullable=False)
+)
+
+movie_emotions = Table(
+    "movie_emotions",
+    metadata,
+    Column("movie_id", ForeignKey("movies.id"), primary_key=True),
+    Column("emotion_id", ForeignKey("emotions.id"), primary_key=True)
 )
 
 engine = create_engine(DATABASE_URL)

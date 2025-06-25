@@ -3,6 +3,10 @@ import pickle
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import MultiLabelBinarizer, MinMaxScaler
 from app.models import database
+from transformers import pipeline
+
+emotion_model = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", top_k=3)
+
 
 async def fetch_training_data():
     query = """
@@ -11,11 +15,12 @@ async def fetch_training_data():
         m.title, 
         m.year, 
         m.rating,
+        m.overview,
         COALESCE(ARRAY_AGG(g.name), '{}') AS genres
     FROM movies m
     LEFT JOIN movie_genres mg ON m.id = mg.movie_id
     LEFT JOIN genres g ON g.id = mg.genre_id
-    GROUP BY m.id, m.title, m.year, m.rating
+    GROUP BY m.id, m.title, m.year, m.rating, m.overview
     """
     rows = await database.fetch_all(query)
     return pd.DataFrame([dict(row._mapping) for row in rows])
@@ -38,6 +43,11 @@ async def train_and_save_model(path="models/model.pkl"):
 
     df["genres"] = df["genres"].apply(lambda g: [x for x in g if isinstance(x, str)])
     df["genres"] = df["genres"].apply(lambda g: g if g else ["Unknown"])
+    
+    print("📦 Przypisywanie emocji do overview...")
+    df["emotions"] = df["overview"].apply(classify_emotions_from_text)
+    print("✅ Emocje dodane. Przykład:")
+    print(df[["title", "emotions"]].head(5))
 
     # Zakoduj
     mlb = MultiLabelBinarizer()
@@ -68,3 +78,12 @@ async def train_and_save_model(path="models/model.pkl"):
         }, f)
 
     return {"status": "ok", "samples": len(df), "features": features.shape[1]}
+
+def classify_emotions_from_text(text):
+    if not isinstance(text, str) or not text.strip():
+        return ["Neutralna"]
+    try:
+        results = emotion_model(text[:512])
+        return [r["label"] for r in results if r["score"] > 0.3]
+    except Exception:
+        return ["Neutralna"]
