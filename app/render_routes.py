@@ -4,7 +4,21 @@ from typing import List, Optional
 import pickle
 import numpy as np
 
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import pandas as pd
+import numpy as np
+import os
+
 router = APIRouter()
+
+
+bert_model_path = "./app/bert_model"
+bert_model = SentenceTransformer('all-MiniLM-L6-v2')
+bert_embeddings = np.load(os.path.join(bert_model_path, "overview_embeddings.npy"))
+bert_df = pd.read_csv(os.path.join(bert_model_path, "movies.csv"))
+
+
 
 # Load model once at startup
 with open("models/model.pkl", "rb") as f:
@@ -42,65 +56,18 @@ async def recommend_movies(payload: RecommendRequest):
 
 class EmotionRequest(BaseModel):
     emotions: List[str]
-    n_recommendations: Optional[int] = 5
+    n_recommendations: Optional[int] = 10
 
-MOCK_FILMS = [
-    {
-        "title": "Up",
-        "year": 2009,
-        "rating": 8.2,
-        "emotions": ["joy", "love"],
-        "feature_similarity": 0.91
-    },
-    {
-        "title": "Inside Out",
-        "year": 2015,
-        "rating": 8.2,
-        "emotions": ["joy", "sadness"],
-        "feature_similarity": 0.87
-    },
-    {
-        "title": "Soul",
-        "year": 2020,
-        "rating": 8.1,
-        "emotions": ["joy", "hope"],
-        "feature_similarity": 0.89
-    },
-    {
-        "title": "Titanic",
-        "year": 1997,
-        "rating": 7.8,
-        "emotions": ["love", "sadness"],
-        "feature_similarity": 0.84
-    },
-    {
-        "title": "Joker",
-        "year": 2019,
-        "rating": 8.4,
-        "emotions": ["anger", "sadness"],
-        "feature_similarity": 0.81
-    },
-]
-
-from typing import List, Optional
-import random
 
 @router.post("/recommend-by-emotion")
 async def recommend_by_emotion(payload: EmotionRequest):
-    requested = set(payload.emotions)
-    matching = []
+    query_text = " ".join(payload.emotions)
+    query_vec = bert_model.encode([query_text])
 
-    for film in MOCK_FILMS:
-        matched = list(requested & set(film["emotions"]))
-        if matched:
-            matching.append({
-                "title": film["title"],
-                "year": film["year"],
-                "rating": film["rating"],
-                "matched_emotions": matched,
-                "score": round(0.8 + 0.03 * len(matched), 2),
-                "feature_similarity": film["feature_similarity"]
-            })
+    similarities = cosine_similarity(query_vec, bert_embeddings).flatten()
+    top_indices = similarities.argsort()[-payload.n_recommendations:][::-1]
 
-    random.shuffle(matching)
-    return matching[:payload.n_recommendations]
+    results = bert_df.iloc[top_indices].copy()
+    results["similarity"] = similarities[top_indices]
+
+    return results[["title", "similarity"]].to_dict(orient="records")
