@@ -11,6 +11,16 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-
+  app:
+    build: .
+    container_name: emotion-bert-app
+    ports:
+      - "8000:8000"  # mapuj lokalnie na 8000, zmień jeśli potrzebujesz inny port
+    environment:
+      - PORT=8000
+    restart: always
+    volumes:
+      - ./app:/app  # opcjonalnie, żeby wprowadzać zmiany w kodzie na żywo
+      
 volumes:
   db_data:
