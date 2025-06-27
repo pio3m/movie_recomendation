@@ -7,20 +7,16 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
-import numpy as np
 import os
 
 router = APIRouter()
-
 
 bert_model_path = "./app/bert_model"
 bert_model = SentenceTransformer('all-MiniLM-L6-v2')
 bert_embeddings = np.load(os.path.join(bert_model_path, "overview_embeddings.npy"))
 bert_df = pd.read_csv(os.path.join(bert_model_path, "movies.csv"))
 
-
-
-# Load model once at startup
+# Load classic kNN model once at startup
 with open("models/model.pkl", "rb") as f:
     model_data = pickle.load(f)
 
@@ -54,14 +50,16 @@ async def recommend_movies(payload: RecommendRequest):
     return recommended
 
 
-class EmotionRequest(BaseModel):
-    emotions: List[str]
+class SentenceRequest(BaseModel):
+    sentence: str
     n_recommendations: Optional[int] = 10
 
+@router.post("/recommend-by-sentence")
+async def recommend_by_sentence(payload: SentenceRequest):
+    query_text = payload.sentence.strip()
+    if not query_text:
+        raise HTTPException(status_code=400, detail="Query sentence cannot be empty.")
 
-@router.post("/recommend-by-emotion")
-async def recommend_by_emotion(payload: EmotionRequest):
-    query_text = " ".join(payload.emotions)
     query_vec = bert_model.encode([query_text])
 
     similarities = cosine_similarity(query_vec, bert_embeddings).flatten()
