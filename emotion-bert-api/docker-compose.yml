@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  emotion-bert-api:
+    build: .
+    container_name: emotion-bert-api
+    ports:
+      - "8000:8000"
+    restart: always
